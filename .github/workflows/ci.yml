@@ -16,4 +16,7 @@ jobs:
           components: clippy, rustfmt
       - run: cargo fmt --check
       - run: cargo clippy -- -D warnings
-      - run: cargo test
+      # Run library and property tests (parallel is fine)
+      - run: cargo test --lib --tests -- --skip allocations
+      # Run allocation tests single-threaded (required due to global allocator counter)
+      - run: cargo test --test allocations -- --test-threads=1
