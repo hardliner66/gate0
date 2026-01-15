@@ -2,19 +2,23 @@
 
 A small, auditable, terminating, deterministic micro-policy engine.
 
-## Guarantees
+## Security Model
 
-- **Termination**: Bounded rules, bounded condition depth, bounded context
-- **Determinism**: Ordered evaluation, stable conflict resolution
-- **No panics**: All operations return `Result`
-- **Zero dependencies**: Pure `std` only
+Gate0 is designed for high-assurance environments where policy evaluation must be deterministic and resource-bounded. See [SECURITY.md](SECURITY.md) for the full threat model, system invariants, and mechanical guarantees.
 
-## Non-goals
+## Verification
 
-- Policy language / DSL
-- Serialization (add `serde` yourself if needed)
-- Dynamic policy reloading
-- Performance optimization
+The correctness and safety of Gate0 are mechanically verified:
+
+- **Unit Tests**: Full coverage of core logic and edge cases.
+- **Property-Based Testing**: Hundreds of adversarial scenarios generated via `proptest`.
+- **Undefined Behavior Check**: Verified panic-free and UB-free using `cargo miri`.
+- **Bounded Evaluation**: Worst-case inputs are tested to ensure termination.
+
+```bash
+cargo test
+cargo +nightly miri test --lib
+```
 
 ## Example
 

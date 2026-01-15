@@ -7,6 +7,15 @@
 //! Given a principal, action, resource, and context, this library returns
 //! a deterministic Allow or Deny decision plus a stable reason code.
 //!
+//! ## Verification
+//!
+//! - **Unit Tests**: Comprehensive coverage in every module.
+//! - **Property-Based Testing**: Validates invariants against random inputs.
+//! - **Undefined Behavior Check**: Verified strictly with `cargo miri`.
+//! - **Panic-Free**: Ensured via compile-time analysis and runtime tests.
+//!
+//! See `SECURITY.md` in the repository root for the full security model.
+//!
 //! ## Guarantees
 //!
 //! - **Termination**: Bounded rules, bounded condition depth, bounded context size
