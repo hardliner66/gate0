@@ -39,6 +39,40 @@ Gate0 is a micro-policy engine. This document defines what it defends against, w
 
 ---
 
+#### Security Architecture
+
+Gate0 implements a three-stage defense pipeline to ensure that hostile input is caught before it can cause CPU or memory exhaustion.
+
+```mermaid
+flowchart LR
+    subgraph Construction ["Stage 1: Construction (Static)"]
+        direction TB
+        C1[Check Rule Count]
+        C2[Validate Matcher Limits]
+        C3[Check Condition Depth]
+        C4[Validate String Lengths]
+    end
+
+    subgraph Evaluation ["Stage 2: Evaluation (Dynamic)"]
+        direction TB
+        E1[Validate Request Strings]
+        E2[Validate Context Size]
+        E3[Stack-Safe Traversal]
+        E4[Constant-Memory Logic]
+    end
+
+    subgraph Cleanup ["Stage 3: Cleanup"]
+        direction TB
+        L1[Stack-Safe Drop]
+    end
+
+    INPUT([Untrusted Input]) --> Construction
+    Construction --> POLICY[(Bounded Policy)]
+    POLICY --> Evaluation
+    Evaluation --> DECISION([Safe Decision])
+    DECISION --> Cleanup
+```
+
 ### Invariants
 
 Gate0 maintains several core invariants to remain defensible:
