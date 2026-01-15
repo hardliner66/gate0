@@ -1,5 +1,8 @@
 # gate0
 
+[![CI](https://github.com/Qarait/gate0/actions/workflows/ci.yml/badge.svg)](https://github.com/Qarait/gate0/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A small, auditable, terminating, deterministic micro-policy engine.
 
 ## Security Model
