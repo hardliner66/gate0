@@ -227,7 +227,97 @@ impl<'a> Policy<'a> {
             Ok(Decision::deny(NO_MATCHING_RULE))
         }
     }
+
+    /// Evaluate this policy against a request, returning observable stats.
+    ///
+    /// Same semantics as `evaluate()`, but also returns `EvaluationStats`
+    /// showing how close the evaluation got to its configured limits.
+    ///
+    /// Use this when you need visibility into the evaluation cost, e.g. for
+    /// monitoring, debugging, or capacity planning.
+    pub fn evaluate_with_stats(
+        &self,
+        request: &Request<'_>,
+    ) -> Result<(Decision, crate::stats::EvaluationStats), PolicyError> {
+        let mut stats = crate::stats::EvaluationStats::new();
+
+        // 1. Validate request string lengths
+        validate_str(request.principal, self.config.max_string_len)?;
+        validate_str(request.action, self.config.max_string_len)?;
+        validate_str(request.resource, self.config.max_string_len)?;
+
+        // 2. Validate context size
+        if request.context.len() > self.config.max_context_attrs {
+            return Err(PolicyError::ContextTooLarge {
+                max: self.config.max_context_attrs,
+                actual: request.context.len(),
+            });
+        }
+
+        // 3. Validate context key/value lengths
+        for (key, value) in request.context {
+            validate_str(key, self.config.max_string_len)?;
+            if let Value::String(s) = value {
+                validate_str(s, self.config.max_string_len)?;
+            }
+        }
+
+        let mut first_allow: Option<ReasonCode> = None;
+        let mut first_deny: Option<ReasonCode> = None;
+
+        // Evaluate rules in order
+        for rule in &self.rules {
+            stats.inc_rules();
+
+            // Check if target matches
+            if !rule
+                .target
+                .matches(request.principal, request.action, request.resource)
+            {
+                continue;
+            }
+
+            // Check if condition matches (if present)
+            let condition_matches = match &rule.condition {
+                None => true,
+                Some(cond) => {
+                    stats.inc_condition_evals();
+                    cond.evaluate(request.context)?
+                }
+            };
+
+            if !condition_matches {
+                continue;
+            }
+
+            // Rule matches - record the effect
+            match rule.effect {
+                Effect::Allow => {
+                    if first_allow.is_none() {
+                        first_allow = Some(rule.reason);
+                    }
+                }
+                Effect::Deny => {
+                    if first_deny.is_none() {
+                        first_deny = Some(rule.reason);
+                    }
+                }
+            }
+        }
+
+        // Apply deny-overrides: Deny wins if any Deny matched
+        let decision = if let Some(reason) = first_deny {
+            Decision::deny(reason)
+        } else if let Some(reason) = first_allow {
+            Decision::allow(reason)
+        } else {
+            Decision::deny(NO_MATCHING_RULE)
+        };
+
+        Ok((decision, stats))
+    }
 }
+
 
 /// Validate that a string does not exceed the maximum allowed length.
 fn validate_str(s: &str, max_len: usize) -> Result<(), PolicyError> {
@@ -646,5 +736,49 @@ mod tests {
             policy.evaluate(&req),
             Err(PolicyError::StringTooLong { max: 10, .. })
         ));
+    }
+
+    #[test]
+    fn test_evaluate_with_stats() {
+        use crate::condition::Condition;
+        use crate::value::Value;
+
+        // Policy with 3 rules, one with a condition
+        let policy = Policy::builder()
+            .rule(Rule::new(
+                Effect::Allow,
+                Target {
+                    principal: Matcher::Exact("admin"),
+                    action: Matcher::Any,
+                    resource: Matcher::Any,
+                },
+                None,
+                ReasonCode(1),
+            ))
+            .rule(Rule::new(
+                Effect::Allow,
+                Target::any(),
+                Some(Condition::Equals {
+                    attr: "role",
+                    value: Value::String("editor"),
+                }),
+                ReasonCode(2),
+            ))
+            .rule(Rule::allow(Target::any(), ReasonCode(3)))
+            .build()
+            .unwrap();
+
+        // Request that matches rule 3 (after checking all rules)
+        let ctx: &[(&str, Value)] = &[("role", Value::String("viewer"))];
+        let request = Request::with_context("alice", "read", "doc", ctx);
+
+        let (decision, stats) = policy.evaluate_with_stats(&request).unwrap();
+
+        assert!(decision.is_allow());
+        assert_eq!(decision.reason, ReasonCode(3));
+        // Should have checked all 3 rules
+        assert_eq!(stats.rules_checked, 3);
+        // Rule 2 has a condition that was evaluated
+        assert_eq!(stats.condition_evals, 1);
     }
 }
