@@ -14,8 +14,12 @@ homepage = "https://github.com/Qarait/gate0"
 [dependencies]
 # Zero dependencies. Intentional.
 
+[features]
+default = []
+safe-stack = []  # Use SafeFixedStack (no unsafe, O(capacity) init)
+
 [dev-dependencies]
-proptest = "1.4"
+proptest = "1.6"
 
 [lib]
 name = "gate0"
