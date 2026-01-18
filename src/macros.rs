@@ -1,15 +1,16 @@
 #[macro_export]
 macro_rules! policy_builder {
-    [ USE $builder:ident; CONFIG { $($key:ident: $value:expr),* $(,)? }; $($t:tt)* ] => {
+    [ USE $builder:expr; CONFIG { $($key:ident: $value:expr),* $(,)? }; $($t:tt)* ] => {
         {
-            $builder = $builder.config($crate::PolicyConfig {
+            let mut builder = $builder;
+            builder = builder.config($crate::PolicyConfig {
                 $(
                     $key: $value,
                 )*
                 ..$crate::PolicyConfig::default()
             });
-            policy_builder![
-                USE $builder;
+            $crate::policy_builder![
+                USE builder;
                 $($t)*
             ]
         }
@@ -17,8 +18,8 @@ macro_rules! policy_builder {
 
     [ CONFIG { $($key:ident: $value:expr),* $(,)? }; $($t:tt)* ] => {
         {
-            let mut builder = $crate::Policy::builder();
-            policy_builder![
+            let builder = $crate::Policy::builder();
+            $crate::policy_builder![
                 USE builder;
                 CONFIG { $($key: $value),* };
                 $($t)*
@@ -26,21 +27,22 @@ macro_rules! policy_builder {
         }
     };
 
-    [ USE $builder:ident; $( $effect:ident $t:tt $(WHERE { $($cond:tt)+ })? => $rc:tt; )* ] => {
+    [ USE $builder:expr; $( $effect:ident $t:tt $(WHERE { $($cond:tt)+ })? => $rc:tt; )* ] => {
         {
+            let mut builder = $builder;
             $(
-                $builder = $builder.rule( $crate::rule!($effect $t $(WHERE { $($cond)+ })? => $rc;) );
+                builder = builder.rule( $crate::rule!($effect $t $(WHERE { $($cond)+ })? => $rc;) );
             )*
-            $builder
+            builder
         }
     };
 
-    [ $($t:tt)* ] => {
+    [ $( $effect:ident $t:tt $(WHERE { $($cond:tt)+ })? => $rc:tt; )* ] => {
         {
-            let mut builder = $crate::Policy::builder();
-            policy_builder![
+            let builder = $crate::Policy::builder();
+            $crate::policy_builder![
                 USE builder;
-                $($t)*
+                $( $effect $t $(WHERE { $($cond)+ })? => $rc;)*
             ]
         }
     };
@@ -50,9 +52,9 @@ macro_rules! policy_builder {
 macro_rules! ctx {
     ( $( $key:expr => $value:expr ),* $(,)? ) => {
         &{
-            let context: [(&str, Value); _] = [
+            let context: [(&str, $crate::Value); _] = [
                 $(
-                    ($key, ::core::convert::Into::<Value>::into($value)),
+                    ($key, ::core::convert::Into::<$crate::Value>::into($value)),
                 )*
             ];
             context
@@ -63,7 +65,7 @@ macro_rules! ctx {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! rule {
-    ($effect:ident ($p:tt, $a:tt, $r:tt) $(WHERE { $($cond:tt)+ })? => $rc:tt;) => {
+    ($effect:ident ($p:tt $a:tt $r:tt) $(WHERE { $($cond:tt)+ })? => $rc:tt;) => {
         $crate::Rule::new(
             $crate::effect!($effect),
             $crate::Target {
@@ -90,7 +92,7 @@ macro_rules! rule {
     ($effect:ident $any:tt $(WHERE { $($cond:tt)+ })? => $rc:tt;) => {
         $crate::Rule::new(
             $crate::effect!($effect),
-            $crate::any_matcher!($any, $crate::Target::any()),
+            $crate::any_matcher!($any, $crate::Target::any(), "field value must be: * or ANY"),
             $crate::option!($($crate::condition!($($cond)+))?),
             $crate::reason_code!($rc),
         )
@@ -123,20 +125,8 @@ macro_rules! option {
 #[doc(hidden)]
 macro_rules! condition {
     () => {};
-    (($attr:ident = $value:literal)) => {{
-        $crate::Condition::Equals {
-            attr: stringify!($attr),
-            value: $crate::Value::from($value),
-        }
-    }};
     (($attr:ident EQ $value:literal)) => {{
         $crate::Condition::Equals {
-            attr: stringify!($attr),
-            value: $crate::Value::from($value),
-        }
-    }};
-    (($attr:ident != $value:literal)) => {{
-        $crate::Condition::NotEquals {
             attr: stringify!($attr),
             value: $crate::Value::from($value),
         }
@@ -152,13 +142,52 @@ macro_rules! condition {
             Box::new($crate::condition!(($($a)+))),
             Box::new($crate::condition!(($($b)+))))
     }};
+    ((($($a:tt)+) AND $b:ident)) => {{
+        $crate::Condition::And(
+            Box::new($crate::condition!(($($a)+))),
+            Box::new($crate::condition!($b)))
+    }};
+    (($a:ident AND ($($b:tt)+))) => {{
+        $crate::Condition::And(
+            Box::new($crate::condition!($a)),
+            Box::new($crate::condition!(($($b)+))))
+    }};
+    (($a:ident AND $b:ident)) => {{
+        $crate::Condition::And(
+            Box::new($crate::condition!($a)),
+            Box::new($crate::condition!($b)))
+    }};
     ((($($a:tt)+) OR ($($b:tt)+))) => {{
         $crate::Condition::Or(
             Box::new($crate::condition!(($($a)+))),
             Box::new($crate::condition!(($($b)+))))
     }};
+    ((($($a:tt)+) OR $b:ident)) => {{
+        $crate::Condition::Or(
+            Box::new($crate::condition!(($($a)+))),
+            Box::new($crate::condition!($b)))
+    }};
+    (($a:ident OR ($($b:tt)+))) => {{
+        $crate::Condition::Or(
+            Box::new($crate::condition!($a)),
+            Box::new($crate::condition!(($($b)+))))
+    }};
+    (($a:ident OR $b:ident)) => {{
+        $crate::Condition::Or(
+            Box::new($crate::condition!($a)),
+            Box::new($crate::condition!($b)))
+    }};
     ((NOT ($($a:tt)+))) => {{
         $crate::Condition::Not(Box::new($crate::condition!(($($a)+))))
+    }};
+    ((NOT $a:ident)) => {{
+        $crate::Condition::Not(Box::new($crate::condition!($a)))
+    }};
+    (TRUE) => {{
+        $crate::Condition::True
+    }};
+    (FALSE) => {{
+        $crate::Condition::False
     }};
     ((TRUE)) => {{
         $crate::Condition::True
@@ -182,11 +211,14 @@ macro_rules! reason_code {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! any_matcher {
-    (*, $result:expr) => {
+    (*, $result:expr, $msg:literal) => {
         $result
     };
-    (ANY, $result:expr) => {
+    (ANY, $result:expr, $msg:literal) => {
         $result
+    };
+    ($other:tt, $result:expr, $msg:literal) => {
+        compile_error!($msg);
     };
 }
 
@@ -195,10 +227,7 @@ macro_rules! any_matcher {
 macro_rules! field_value_to_matcher {
     ([ $($vals:literal),* $(,)? ]) => { $crate::Matcher::OneOf(&[ $($vals),* ]) };
     ($val:literal) => { $crate::Matcher::Exact($val) };
-    ($e:tt) => { $crate::any_matcher!($e, $crate::Matcher::Any) };
-    ($other:tt) => {
-        compile_error!("field value must be: *, any, a literal, or a list of literals");
-    };
+    ($e:tt) => { $crate::any_matcher!($e, $crate::Matcher::Any, "field value must be: *, any, a literal, or a list of literals") };
 }
 
 #[macro_export]
@@ -210,20 +239,20 @@ macro_rules! field_matcher {
 
     (@find_principal, PRINCIPAL : $val:tt, $($rest:tt)*) => { $crate::field_value_to_matcher!($val) };
     (@find_principal, $other:ident : $val:tt, $($rest:tt)*) => { $crate::field_matcher!(@find_principal, $($rest)*) };
-    (@find_principal,) => { Matcher::Any };
+    (@find_principal,) => { $crate::Matcher::Any };
 
     (@find_action, ACTION : $val:tt, $($rest:tt)*) => { $crate::field_value_to_matcher!($val) };
     (@find_action, $other:ident : $val:tt, $($rest:tt)*) => { $crate::field_matcher!(@find_action, $($rest)*) };
-    (@find_action,) => { Matcher::Any };
+    (@find_action,) => { $crate::Matcher::Any };
 
     (@find_resource, RESOURCE : $val:tt, $($rest:tt)*) => { $crate::field_value_to_matcher!($val) };
     (@find_resource, $other:ident : $val:tt, $($rest:tt)*) => { $crate::field_matcher!(@find_resource, $($rest)*) };
-    (@find_resource,) => { Matcher::Any };
+    (@find_resource,) => { $crate::Matcher::Any };
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{Effect, Matcher, Policy, PolicyConfig, ReasonCode, Rule, Target};
+    use crate::{Condition, Effect, Matcher, Policy, PolicyConfig, ReasonCode, Rule, Target, Value};
 
     #[test]
     fn test_simple_any_rules() {
@@ -259,12 +288,12 @@ mod test {
         const REASON_ONE: ReasonCode = ReasonCode(1);
         const REASON_TWO: ReasonCode = ReasonCode(2);
         let policy = policy_builder![
-            ALLOW ("alice", "read",  "doc1") => 1;
-            ALLOW ("bob"  , "write", "doc2") => REASON_ONE;
+            ALLOW ("alice" "read"  "doc1") => 1;
+            ALLOW ("bob"   "write" "doc2") => REASON_ONE;
 
-            DENY  ("eve", *, ANY) => 2;
-            DENY  (["eve", "carl"], "write", *) => 2;
-            DENY  ("mallory", "delete", "doc3") => REASON_TWO;
+            DENY  ("eve" * ANY) => 2;
+            DENY  (["eve", "carl"] "write" *) => 2;
+            DENY  ("mallory" "delete" "doc3") => REASON_TWO;
         ]
         .build()
         .unwrap();
@@ -366,12 +395,12 @@ mod test {
         const REASON_THREE: ReasonCode = ReasonCode(3);
         let policy = policy_builder![
             ALLOW * => 1;
-            ALLOW ("alice", "read", "doc1") => REASON_TWO;
+            ALLOW ("alice" "read" "doc1") => REASON_TWO;
             DENY {
                 PRINCIPAL: "eve",
                 ACTION:    *,
                 RESOURCE:  ANY,
-            }=> REASON_THREE;
+            } => REASON_THREE;
         ]
         .build()
         .unwrap();
@@ -421,23 +450,84 @@ mod test {
     fn test_where() {
         let policy = policy_builder![
             ALLOW ANY
-                WHERE { (role = "admin") } => 1;
+                WHERE { (role EQ "admin") } => 1;
             ALLOW ANY
-                WHERE { (role != "admin") } => 1;
+                WHERE { (role NEQ "admin") } => 1;
             ALLOW ANY
-                WHERE { (NOT (role = "admin")) } => 1;
+                WHERE { (NOT ((role EQ "admin") OR TRUE)) } => 1;
             ALLOW ANY
-                WHERE { (NOT ((role != "admin") AND (TRUE))) } => 2;
+                WHERE { (NOT ((role NEQ "admin") AND TRUE)) } => 2;
         ]
         .build()
         .unwrap();
-        assert_eq!(policy.config().max_rules, 500);
-        assert_eq!(policy.config().max_condition_depth, 5);
+
+        let rules = policy.rules();
+        assert_eq!(rules.len(), 4);
+        assert_eq!(rules, &[
+            Rule::new(
+                Effect::Allow,
+                Target::any(),
+                Some(
+                    Condition::Equals {
+                        attr: "role",
+                        value: Value::from("admin"),
+                    }
+                ),
+                ReasonCode(1),
+            ),
+            Rule::new(
+                Effect::Allow,
+                Target::any(),
+                Some(
+                    Condition::NotEquals {
+                        attr: "role",
+                        value: Value::from("admin"),
+                    }
+                ),
+                ReasonCode(1),
+            ),
+            Rule::new(
+                Effect::Allow,
+                Target::any(),
+                Some(
+                    Condition::Not(Box::new(
+                        Condition::Or(
+                            Box::new(
+                                Condition::Equals {
+                                    attr: "role",
+                                    value: Value::from("admin"),
+                                }
+                            ),
+                            Box::new(Condition::True),
+                        )
+                    ))
+                ),
+                ReasonCode(1),
+            ),
+            Rule::new(
+                Effect::Allow,
+                Target::any(),
+                Some(
+                    Condition::Not(Box::new(
+                        Condition::And(
+                            Box::new(
+                                Condition::NotEquals {
+                                    attr: "role",
+                                    value: Value::from("admin"),
+                                }
+                            ),
+                            Box::new(Condition::True),
+                        )
+                    ))
+                ),
+                ReasonCode(2),
+            ),
+        ]);
     }
 
     #[test]
     fn test_external_builder() {
-        let mut builder = Policy::builder().config(PolicyConfig {
+        let builder = Policy::builder().config(PolicyConfig {
             max_rules: 200,
             ..PolicyConfig::default()
         });

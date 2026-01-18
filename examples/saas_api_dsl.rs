@@ -1,4 +1,4 @@
-use gate0::{Matcher, ReasonCode, Request, Value, policy_builder, ctx};
+use gate0::{ReasonCode, Request, ctx, policy_builder};
 
 // Application-specific reason codes
 const ADMIN_ACCESS: ReasonCode = ReasonCode(100);
@@ -9,13 +9,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = policy_builder![
         // Rule: Admins can do anything
         ALLOW ANY
-            WHERE { (role = "admin") } => ADMIN_ACCESS;
+            WHERE { (role EQ "admin") } => ADMIN_ACCESS;
 
         // Rule: Members can read or list
-        ALLOW {
-            ACTION: ["read", "list"]
-        }
-        WHERE { (role = "member") } => MEMBER_READ;
+        ALLOW { ACTION: ["read", "list"] }
+            WHERE { (role EQ "member") } => MEMBER_READ;
     ].build()?;
 
     println!("--- Gate0 SaaS API Example ---");
