@@ -64,6 +64,26 @@ cargo build --features safe-stack
 
 Both implementations provide identical semantics and the same zero-allocation guarantee during evaluation. The choice is between performance (O(used)) and absolute safety (O(capacity)). For small stacks with cheap Default types like bool, the difference is negligible.
 
+## Integration Architecture
+
+Gate0 is designed to function as a Policy Decision Point (PDP) within a larger host application. To maintain determinism and strict bounds, Gate0 does not handle I/O, networking, or object lifecycles.
+
+The recommended integration pattern separates concerns across three layers. The host application (API gateway, SSH server, etc.) manages state, identity, and side effects. An adapter layer normalizes this complex state into primitives that Gate0 understands (strings, bools, ints). Gate0 evaluates the flattened context purely and returns a Decision.
+
+```
+Host Application (User Request)
+        │
+        ▼
+  [Adapter Layer]  →  Pre-computes context (time, IP ranges, MFA status)
+        │              Converts "complex" to "primitive"
+        ▼
+  [Gate0 Engine]   →  Pure evaluation (0 allocations, bounded stack)
+        │
+        ▼
+  Decision::Allow / Deny
+```
+
+This separation explains why Gate0 does not include complex matchers like IP range checks or regex. The adapter layer handles domain-specific logic and presents Gate0 with pre-computed boolean or string attributes. Gate0 stays small, auditable, and deterministic.
 
 ## Example
 
