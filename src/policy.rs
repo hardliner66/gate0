@@ -89,11 +89,6 @@ impl<'a> Policy<'a> {
         PolicyBuilder::new()
     }
 
-    #[cfg(test)]
-    pub(crate) fn rules(&self) -> &[Rule<'a>] {
-        &self.rules
-    }
-
     /// Create a policy with the given rules and default config.
     pub fn new(rules: Vec<Rule<'a>>) -> Result<Self, PolicyError> {
         Self::with_config(rules, PolicyConfig::default())

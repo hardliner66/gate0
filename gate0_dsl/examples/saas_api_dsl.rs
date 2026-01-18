@@ -5,7 +5,8 @@
 //! 2. Users can read/list resources within their tenant.
 //! 3. Cross-tenant access is denied by default.
 
-use gate0::{ReasonCode, Request, ctx, policy_builder};
+use gate0::{ReasonCode, Request, ctx};
+use gate0_dsl::policy_builder;
 
 // Application-specific reason codes
 const ADMIN_ACCESS: ReasonCode = ReasonCode(100);
@@ -19,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             WHERE { (role EQ "admin") } => ADMIN_ACCESS;
 
         // Rule: Members can read or list
-        ALLOW { ACTION: ["read", "list"] }
+        ALLOW { action: ["read", "list"] }
             WHERE { (role EQ "member") } => MEMBER_READ;
     ].build()?;
 
