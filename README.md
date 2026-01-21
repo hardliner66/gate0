@@ -109,9 +109,9 @@ Gate0 is intentionally constrained to remain predictable and performant.
  
 **No Overlapping Decisions**: Within a single effect class (Allow/Deny), only the first matching rule is returned. Conflict resolution is strictly order-dependent.
 
-## Ecosystem
+## Community Extensions
 
-The following community projects extend the Gate0 engine for specialized use cases.
+The following projects extend the Gate0 engine for specialized use cases.
 
 **gate0_dsl**: A Rust-native Domain Specific Language for Gate0 developed by **hardliner66**. It leverages Rust macros to provide a clean and readable syntax for defining policies directly in code. You can find the implementation and documentation at [hardliner66/gate0_dsl](https://github.com/hardliner66/gate0_dsl).
 
