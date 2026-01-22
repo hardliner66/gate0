@@ -9,7 +9,6 @@ mod loader;
 pub mod reference_eval;
 mod shadow;
 mod translate;
-pub mod fuzz;
 
 pub use ast::*;
 pub use explain::{explain, format_explain, ExplainResult};

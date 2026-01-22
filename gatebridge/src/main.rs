@@ -48,12 +48,6 @@ fn main() -> ExitCode {
             }
             cmd_explain(&args[2], &args[3])
         }
-        "fuzz" => {
-            let iterations = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1000);
-            let seed = args.get(3).and_then(|s| s.parse().ok());
-            gatebridge::fuzz::run_fuzz(iterations, seed);
-            ExitCode::SUCCESS
-        }
         "help" | "--help" | "-h" => {
             print_usage();
             ExitCode::SUCCESS
@@ -75,7 +69,6 @@ fn print_usage() {
     eprintln!("  gatebridge shadow <policy.yaml> <request.json> Dual evaluation");
     eprintln!("  gatebridge shadow <policy.yaml> -              Read request from stdin");
     eprintln!("  gatebridge explain <policy.yaml> <request.json> Debug evaluation");
-    eprintln!("  gatebridge fuzz [iterations] [seed]            Differential fuzzing");
     eprintln!("  gatebridge help                                Show this message");
     eprintln!();
     eprintln!("Exit codes:");

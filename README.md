@@ -88,9 +88,9 @@ assert!(decision.is_allow());
 
 The `examples/` directory contains illustrative scenarios demonstrating common Gate0 usage patterns:
 
-- **SaaS API**: Standard RBAC/Multi-tenancy logic.
-- **Zero Trust Network**: Attribute-Based Access Control (ABAC) with MFA and location checks.
-- **Complex Overrides**: Demonstrating Deny-Overrides conflict resolution.
+**SaaS API**: Standard RBAC/Multi-tenancy logic.
+**Zero Trust Network**: Attribute-Based Access Control (ABAC) with MFA and location checks.
+**Complex Overrides**: Demonstrating Deny-Overrides conflict resolution.
 
 Run them with:
 ```bash
